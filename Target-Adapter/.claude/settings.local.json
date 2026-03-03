@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv:*)",
+      "Bash(\"C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\venv\\\\Scripts\\\\pip.exe\" install pytest google-cloud-bigquery)",
+      "Bash(\"C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\venv\\\\Scripts\\\\python.exe\" -m pytest:*)",
+      "Bash(\"C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\venv\\\\Scripts\\\\python.exe\" -c \"import yaml; print\\(''available''\\)\")",
+      "Bash(set:*)",
+      "Bash(export:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(gcloud auth application-default print-access-token:*)",
+      "Bash(gcloud config get-value:*)",
+      "Bash(cmd /c \"set GCP_PROJECT_ID=q-mercato-dev && python -m pytest tests/target/ta02/test_ta02.py::test_adapter_connect_via_workload_identity -v\")",
+      "Bash(GCP_PROJECT_ID=q-mercato-dev python -m pytest:*)",
+      "Bash(gcloud auth application-default login:*)",
+      "Bash(gcloud auth login:*)",
+      "Bash(gcloud auth print-access-token:*)",
+      "Bash(pytest:*)",
+      "Bash(cmd /c \"set GCP_PROJECT_ID=q-mercato-dev && C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\venv\\\\Scripts\\\\python.exe -m pytest C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\tests\\\\target\\\\ta02\\\\test_ta02.py -v -m integration\")",
+      "Bash(cmd /c \"set GCP_PROJECT_ID=q-mercato-dev & C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\venv\\\\Scripts\\\\python.exe -m pytest C:\\\\Users\\\\Quadrant\\\\Desktop\\\\Target\\\\tests\\\\target\\\\ta02\\\\test_ta02.py -v -m integration 2>&1\")",
+      "Bash(GCP_PROJECT_ID=q-mercato-dev C:/Users/Quadrant/Desktop/Target/venv/Scripts/python.exe -m pytest:*)",
+      "Bash(C:/Users/Quadrant/Desktop/Target/venv/Scripts/python.exe -m pytest:*)"
+    ]
+  }
+}

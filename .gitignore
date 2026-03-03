@@ -1,0 +1,24 @@
+## Secrets
+.env
+*.pem
+*.pfx
+*.key
+*.cer
+*.crt
+*.p12
+
+## Node modules and build artifacts
+node_modules/
+dist/
+build/
+coverage/
+
+## Python
+__pycache__/
+*.pyc
+
+## OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

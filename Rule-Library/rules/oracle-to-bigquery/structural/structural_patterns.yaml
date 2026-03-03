@@ -1,0 +1,110 @@
+- rule_id: "OBQ-051"
+  version: "1.0"
+  name: "CONNECT BY PRIOR to Recursive CTE"
+  severity: "critical"
+  source_pattern:
+    construct: "CONNECT_BY_PRIOR"
+  target_pattern: "WITH RECURSIVE cte AS (anchor UNION ALL recursive) SELECT * FROM cte"
+  confidence: 0.7
+  tags: ["structural", "hierarchical", "cte"]
+  why: >
+    Oracle CONNECT BY PRIOR traverses hierarchical data. BigQuery uses
+    standard SQL recursive CTEs. LEVEL pseudo-column maps to a counter
+    incremented in the recursive step. SYS_CONNECT_BY_PATH needs string
+    concatenation in the CTE.
+  tests:
+    - input: "SELECT emp_id, mgr_id FROM emp CONNECT BY PRIOR emp_id = mgr_id"
+      expected: "WITH RECURSIVE cte AS (SELECT emp_id, mgr_id FROM emp WHERE mgr_id IS NULL UNION ALL SELECT e.emp_id, e.mgr_id FROM emp e JOIN cte c ON e.mgr_id = c.emp_id) SELECT * FROM cte"
+
+- rule_id: "OBQ-052"
+  version: "1.0"
+  name: "START WITH to CTE anchor"
+  severity: "high"
+  source_pattern:
+    construct: "START_WITH"
+  target_pattern: "CTE anchor clause (WHERE condition in base SELECT)"
+  confidence: 0.7
+  tags: ["structural", "hierarchical", "cte"]
+  why: >
+    Oracle START WITH defines the root rows of a hierarchical query.
+    In a recursive CTE, this becomes the WHERE clause in the anchor
+    (non-recursive) member of the UNION ALL.
+  tests:
+    - input: "START WITH mgr_id IS NULL"
+      expected: "SELECT ... FROM emp WHERE mgr_id IS NULL  -- anchor of recursive CTE"
+    - input: "START WITH dept_id = 10"
+      expected: "SELECT ... FROM emp WHERE dept_id = 10  -- anchor of recursive CTE"
+
+- rule_id: "OBQ-053"
+  version: "1.0"
+  name: "LATERAL view to CROSS JOIN UNNEST"
+  severity: "medium"
+  source_pattern:
+    construct: "LATERAL_VIEW"
+  target_pattern: "CROSS JOIN UNNEST({array}) AS {alias}"
+  confidence: 0.8
+  tags: ["structural", "join", "array"]
+  why: >
+    Oracle LATERAL inline views allow correlated subqueries in the FROM
+    clause. BigQuery supports CROSS JOIN UNNEST for array expansion, and
+    comma-separated subqueries for correlated lateral joins.
+  tests:
+    - input: "SELECT * FROM orders, LATERAL (SELECT * FROM items WHERE items.order_id = orders.id)"
+      expected: "SELECT * FROM orders CROSS JOIN UNNEST(orders.items) AS item"
+    - input: "SELECT * FROM t, LATERAL (SELECT COLUMN_VALUE FROM TABLE(split_array))"
+      expected: "SELECT * FROM t CROSS JOIN UNNEST(split_array) AS element"
+
+- rule_id: "OBQ-054"
+  version: "1.0"
+  name: "PIVOT clause (native support)"
+  severity: "medium"
+  source_pattern:
+    construct: "PIVOT"
+  target_pattern: "PIVOT (aggregate FOR column IN (values))"
+  confidence: 0.9
+  tags: ["structural", "pivot", "compatible"]
+  why: >
+    Oracle PIVOT and BigQuery PIVOT have compatible syntax. BigQuery
+    natively supports PIVOT since 2021. Minor syntax differences may
+    exist in complex cases with multiple aggregates.
+  tests:
+    - input: "SELECT * FROM sales PIVOT (SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))"
+      expected: "SELECT * FROM sales PIVOT (SUM(amount) FOR quarter IN ('Q1', 'Q2', 'Q3', 'Q4'))"
+
+- rule_id: "OBQ-055"
+  version: "1.0"
+  name: "MERGE statement (compatible)"
+  severity: "medium"
+  source_pattern:
+    construct: "MERGE"
+  target_pattern: "MERGE INTO target USING source ON condition WHEN MATCHED/NOT MATCHED"
+  confidence: 0.95
+  tags: ["structural", "dml", "compatible"]
+  why: >
+    Oracle MERGE and BigQuery MERGE have compatible syntax. Both support
+    WHEN MATCHED THEN UPDATE and WHEN NOT MATCHED THEN INSERT. BigQuery
+    also supports WHEN NOT MATCHED BY SOURCE. Minor adjustments may be
+    needed for Oracle-specific extensions.
+  tests:
+    - input: "MERGE INTO target t USING source s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name"
+      expected: "MERGE INTO target t USING source s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name"
+
+- rule_id: "OBQ-056"
+  version: "1.0"
+  name: "(+) join syntax to LEFT OUTER JOIN"
+  severity: "high"
+  source_pattern:
+    construct: "ORACLE_OUTER_JOIN"
+  target_pattern: "LEFT OUTER JOIN ... ON ..."
+  confidence: 0.9
+  tags: ["structural", "join", "syntax"]
+  why: >
+    Oracle's proprietary (+) syntax for outer joins is not supported in
+    BigQuery. Convert to ANSI SQL LEFT/RIGHT OUTER JOIN syntax. The (+)
+    appears on the deficient side — the table opposite the (+) is the
+    preserved (outer) table.
+  tests:
+    - input: "SELECT * FROM emp e, dept d WHERE e.dept_id = d.id(+)"
+      expected: "SELECT * FROM emp e LEFT OUTER JOIN dept d ON e.dept_id = d.id"
+    - input: "SELECT * FROM a, b WHERE a.id(+) = b.id"
+      expected: "SELECT * FROM b LEFT OUTER JOIN a ON a.id = b.id"

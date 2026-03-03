@@ -1,0 +1,33 @@
+# Rule Template — Oracle-to-BigQuery Translation Rules
+# Copy this template when creating new rules.
+#
+# Naming conventions:
+#   OBQ-xxx  = Oracle → BigQuery specific
+#   SBQ-xxx  = Shared BigQuery patterns (source-agnostic)
+#
+# source_pattern keys (pick one primary):
+#   function     – Oracle built-in function name
+#   keyword      – Oracle SQL keyword or pseudo-column
+#   object_type  – Oracle DDL data type
+#   construct    – Multi-token Oracle idiom
+#
+# Optional source_pattern qualifiers:
+#   arg_count    – expected argument count
+#   arg_type     – semantic hint (e.g., date, null_compare)
+
+- rule_id: "OBQ-XXX"
+  version: "1.0"
+  name: "Short descriptive name"
+  severity: "high"               # critical | high | medium | low
+  source_pattern:
+    function: "ORACLE_FUNC"      # or keyword / object_type / construct
+    # arg_count: 2               # optional
+    # arg_type: "date"           # optional
+  target_pattern: "BIGQUERY_EQUIVALENT({a}, {b})"
+  confidence: 0.9                # 0.0 – 1.0
+  tags: ["category-tag", "function"]
+  why: >
+    Explain WHY this mapping exists, any gotchas, and edge cases.
+  tests:
+    - input: "ORACLE_FUNC(col1, col2)"
+      expected: "BIGQUERY_EQUIVALENT(col1, col2)"

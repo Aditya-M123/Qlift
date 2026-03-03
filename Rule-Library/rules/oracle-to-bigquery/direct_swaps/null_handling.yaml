@@ -1,0 +1,77 @@
+- rule_id: "OBQ-001"
+  version: "1.0"
+  name: "NVL to IFNULL"
+  severity: "high"
+  source_pattern:
+    function: "NVL"
+    arg_count: 2
+  target_pattern: "IFNULL({a}, {b})"
+  confidence: 1.0
+  tags: ["null-handling", "function"]
+  why: >
+    Oracle NVL(expr1, expr2) returns expr2 when expr1 is NULL. BigQuery IFNULL
+    is a direct equivalent with identical semantics.
+  tests:
+    - input: "NVL(col1, 0)"
+      expected: "IFNULL(col1, 0)"
+    - input: "NVL(name, 'unknown')"
+      expected: "IFNULL(name, 'unknown')"
+
+- rule_id: "OBQ-002"
+  version: "1.0"
+  name: "NVL2 to IF IS NOT NULL"
+  severity: "high"
+  source_pattern:
+    function: "NVL2"
+    arg_count: 3
+  target_pattern: "IF({a} IS NOT NULL, {b}, {c})"
+  confidence: 0.95
+  tags: ["null-handling", "function"]
+  why: >
+    Oracle NVL2(expr1, expr2, expr3) returns expr2 when expr1 is NOT NULL, else
+    expr3. BigQuery has no NVL2; use IF(expr IS NOT NULL, ...) instead.
+  tests:
+    - input: "NVL2(col1, 'has_value', 'no_value')"
+      expected: "IF(col1 IS NOT NULL, 'has_value', 'no_value')"
+    - input: "NVL2(salary, salary * 1.1, 0)"
+      expected: "IF(salary IS NOT NULL, salary * 1.1, 0)"
+
+- rule_id: "OBQ-003"
+  version: "1.0"
+  name: "DECODE to CASE WHEN"
+  severity: "high"
+  source_pattern:
+    function: "DECODE"
+  target_pattern: "CASE WHEN {a} = {b} THEN {c} ... END"
+  confidence: 0.9
+  tags: ["null-handling", "function", "control-flow"]
+  why: >
+    Oracle DECODE is a compact if-then-else. BigQuery has no DECODE; convert to
+    a standard CASE WHEN expression. Beware: DECODE treats NULL = NULL as true,
+    which standard SQL does not — see OBQ-004 for the NULL gotcha.
+  tests:
+    - input: "DECODE(status, 'A', 'Active', 'I', 'Inactive', 'Unknown')"
+      expected: "CASE WHEN status = 'A' THEN 'Active' WHEN status = 'I' THEN 'Inactive' ELSE 'Unknown' END"
+    - input: "DECODE(flag, 1, 'Yes', 'No')"
+      expected: "CASE WHEN flag = 1 THEN 'Yes' ELSE 'No' END"
+
+- rule_id: "OBQ-004"
+  version: "1.0"
+  name: "DECODE NULL gotcha"
+  severity: "critical"
+  source_pattern:
+    function: "DECODE"
+    arg_type: "null_compare"
+  target_pattern: "IF({a} IS NULL, {b}, {c})"
+  confidence: 1.0
+  tags: ["null-handling", "function", "gotcha"]
+  why: >
+    CRITICAL: Oracle DECODE treats NULL = NULL as true, but SQL standard
+    (and BigQuery) does not. When DECODE compares against NULL, the translated
+    output must use IF(x IS NULL, r1, r2) — never CASE WHEN x = NULL,
+    which always evaluates to UNKNOWN.
+  tests:
+    - input: "DECODE(x, NULL, 'is_null', 'not_null')"
+      expected: "IF(x IS NULL, 'is_null', 'not_null')"
+    - input: "DECODE(col, NULL, 0, col)"
+      expected: "IF(col IS NULL, 0, col)"

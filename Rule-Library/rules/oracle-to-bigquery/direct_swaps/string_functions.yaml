@@ -1,0 +1,96 @@
+- rule_id: "OBQ-013"
+  version: "1.0"
+  name: "INSTR to STRPOS"
+  severity: "high"
+  source_pattern:
+    function: "INSTR"
+    arg_count: 2
+  target_pattern: "STRPOS({a}, {b})"
+  confidence: 0.95
+  tags: ["string", "function"]
+  why: >
+    Oracle INSTR(string, substring) returns the position of substring.
+    BigQuery STRPOS is the equivalent. Note: Oracle's INSTR supports
+    optional 3rd/4th args (start position, occurrence) which have no
+    direct BigQuery equivalent and require more complex translation.
+  tests:
+    - input: "INSTR(name, 'Smith')"
+      expected: "STRPOS(name, 'Smith')"
+    - input: "INSTR(email, '@')"
+      expected: "STRPOS(email, '@')"
+
+- rule_id: "OBQ-014"
+  version: "1.0"
+  name: "LENGTHB to BYTE_LENGTH"
+  severity: "medium"
+  source_pattern:
+    function: "LENGTHB"
+  target_pattern: "BYTE_LENGTH({a})"
+  confidence: 1.0
+  tags: ["string", "function"]
+  why: >
+    Oracle LENGTHB returns the byte length of a string. BigQuery
+    BYTE_LENGTH is the direct equivalent.
+  tests:
+    - input: "LENGTHB(name)"
+      expected: "BYTE_LENGTH(name)"
+    - input: "LENGTHB('hello')"
+      expected: "BYTE_LENGTH('hello')"
+
+- rule_id: "OBQ-015"
+  version: "1.0"
+  name: "LISTAGG to STRING_AGG"
+  severity: "high"
+  source_pattern:
+    function: "LISTAGG"
+    arg_count: 2
+  target_pattern: "STRING_AGG({a}, {b})"
+  confidence: 0.9
+  tags: ["string", "function", "aggregation"]
+  why: >
+    Oracle LISTAGG(expr, delimiter) concatenates grouped values. BigQuery
+    STRING_AGG is the equivalent. Note: LISTAGG WITHIN GROUP (ORDER BY ...)
+    requires STRING_AGG(expr, delimiter ORDER BY ...) in BigQuery.
+  tests:
+    - input: "LISTAGG(name, ', ')"
+      expected: "STRING_AGG(name, ', ')"
+    - input: "LISTAGG(city, '; ') WITHIN GROUP (ORDER BY city)"
+      expected: "STRING_AGG(city, '; ' ORDER BY city)"
+
+- rule_id: "OBQ-016"
+  version: "1.0"
+  name: "SUBSTR (compatible)"
+  severity: "low"
+  source_pattern:
+    function: "SUBSTR"
+  target_pattern: "SUBSTR({a}, {b}, {c})"
+  confidence: 1.0
+  tags: ["string", "function", "compatible"]
+  why: >
+    Oracle SUBSTR and BigQuery SUBSTR have compatible syntax and semantics.
+    This rule exists to document that no translation is needed and to
+    prevent false positives from other translation tools.
+  tests:
+    - input: "SUBSTR(name, 1, 3)"
+      expected: "SUBSTR(name, 1, 3)"
+    - input: "SUBSTR(description, 5)"
+      expected: "SUBSTR(description, 5)"
+
+- rule_id: "OBQ-017"
+  version: "1.0"
+  name: "Double-pipe concat to CONCAT"
+  severity: "medium"
+  source_pattern:
+    construct: "DOUBLE_PIPE_CONCAT"
+  target_pattern: "CONCAT({a}, {b})"
+  confidence: 0.95
+  tags: ["string", "construct", "operator"]
+  why: >
+    Oracle uses || for string concatenation. BigQuery also supports || but
+    the recommended practice is CONCAT() for clarity and multi-argument
+    support. For chained || (a || b || c), use CONCAT(a, b, c).
+  tests:
+    - input: "first_name || ' ' || last_name"
+      expected: "CONCAT(first_name, ' ', last_name)"
+    - input: "prefix || code"
+      expected: "CONCAT(prefix, code)"

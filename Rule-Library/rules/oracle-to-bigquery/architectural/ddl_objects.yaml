@@ -1,0 +1,109 @@
+- rule_id: "OBQ-045"
+  version: "1.0"
+  name: "TRIGGER to Cloud Functions / Pub/Sub"
+  severity: "critical"
+  source_pattern:
+    object_type: "TRIGGER"
+  target_pattern: "Cloud Functions + Pub/Sub or BigQuery scheduled queries"
+  confidence: 0.3
+  tags: ["architectural", "ddl", "event-driven"]
+  why: >
+    Oracle database triggers fire on DML events. BigQuery has no triggers.
+    Alternatives: (1) Cloud Functions triggered by Pub/Sub on data changes,
+    (2) scheduled queries for periodic processing, (3) streaming inserts
+    with Cloud Dataflow. Architecture-level redesign required.
+  tests:
+    - input: "CREATE TRIGGER emp_audit AFTER INSERT ON emp FOR EACH ROW"
+      expected: "Cloud Function triggered by Pub/Sub on emp table changes"
+
+- rule_id: "OBQ-046"
+  version: "1.0"
+  name: "PACKAGE to standalone routines"
+  severity: "critical"
+  source_pattern:
+    object_type: "PACKAGE"
+  target_pattern: "Standalone BigQuery routines (procedures/functions)"
+  confidence: 0.3
+  tags: ["architectural", "ddl", "plsql"]
+  why: >
+    Oracle PACKAGEs group related procedures, functions, and types.
+    BigQuery has no package concept. Split into standalone routines
+    (CREATE PROCEDURE / CREATE FUNCTION). Package state variables
+    need alternative storage (e.g., temp tables, session variables).
+  tests:
+    - input: "CREATE PACKAGE emp_pkg AS PROCEDURE hire(...); FUNCTION get_salary(...); END"
+      expected: "CREATE PROCEDURE emp_pkg_hire(...); CREATE FUNCTION emp_pkg_get_salary(...)"
+
+- rule_id: "OBQ-047"
+  version: "1.0"
+  name: "SEQUENCE to GENERATE_UUID or ROW_NUMBER"
+  severity: "high"
+  source_pattern:
+    object_type: "SEQUENCE"
+  target_pattern: "GENERATE_UUID() or ROW_NUMBER() OVER ()"
+  confidence: 0.6
+  tags: ["architectural", "ddl", "identity"]
+  why: >
+    Oracle SEQUENCEs generate unique incrementing numbers. BigQuery has
+    no sequences. Options: (1) GENERATE_UUID() for unique IDs (not sequential),
+    (2) ROW_NUMBER() OVER () for sequential numbering within a query,
+    (3) MAX(id) + ROW_NUMBER() for pseudo-sequential inserts.
+  tests:
+    - input: "CREATE SEQUENCE emp_seq START WITH 1 INCREMENT BY 1"
+      expected: "GENERATE_UUID() or ROW_NUMBER() OVER (ORDER BY ...)"
+    - input: "emp_seq.NEXTVAL"
+      expected: "GENERATE_UUID()"
+
+- rule_id: "OBQ-048"
+  version: "1.0"
+  name: "SYNONYM to fully qualified names"
+  severity: "medium"
+  source_pattern:
+    object_type: "SYNONYM"
+  target_pattern: "Fully qualified table name (project.dataset.table)"
+  confidence: 0.8
+  tags: ["architectural", "ddl", "naming"]
+  why: >
+    Oracle SYNONYMs create aliases for database objects. BigQuery has no
+    synonyms. Replace with fully qualified names (project.dataset.table)
+    or use BigQuery views as aliases.
+  tests:
+    - input: "CREATE SYNONYM emp FOR hr.employees"
+      expected: "Use fully qualified name: project.dataset.employees"
+
+- rule_id: "OBQ-049"
+  version: "1.0"
+  name: "DBLINK to EXTERNAL_QUERY"
+  severity: "medium"
+  source_pattern:
+    object_type: "DBLINK"
+  target_pattern: "EXTERNAL_QUERY() via BigQuery Connection"
+  confidence: 0.5
+  tags: ["architectural", "ddl", "federation"]
+  why: >
+    Oracle database links allow cross-database queries. BigQuery uses
+    EXTERNAL_QUERY() with Cloud SQL connections or BigQuery Omni for
+    federated queries. Requires setting up a BigQuery Connection resource.
+  tests:
+    - input: "SELECT * FROM emp@remote_db"
+      expected: "SELECT * FROM EXTERNAL_QUERY('connection_id', 'SELECT * FROM emp')"
+
+- rule_id: "OBQ-050"
+  version: "1.0"
+  name: "EXCEPTION block to BEGIN...EXCEPTION"
+  severity: "high"
+  source_pattern:
+    construct: "EXCEPTION_BLOCK"
+  target_pattern: "BEGIN...EXCEPTION WHEN ERROR THEN in BigQuery scripting"
+  confidence: 0.7
+  tags: ["architectural", "plsql", "error-handling"]
+  why: >
+    Oracle PL/SQL EXCEPTION blocks handle named exceptions (NO_DATA_FOUND,
+    TOO_MANY_ROWS, etc.). BigQuery scripting supports BEGIN...EXCEPTION
+    WHEN ERROR THEN but with limited exception types. Custom exception
+    names must be converted to generic error handling.
+  tests:
+    - input: "EXCEPTION WHEN NO_DATA_FOUND THEN v_result := NULL"
+      expected: "EXCEPTION WHEN ERROR THEN SET v_result = NULL"
+    - input: "EXCEPTION WHEN OTHERS THEN RAISE"
+      expected: "EXCEPTION WHEN ERROR THEN RAISE USING MESSAGE = @@error.message"

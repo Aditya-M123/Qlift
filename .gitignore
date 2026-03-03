@@ -22,3 +22,12 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+## Additional Python ignores
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+## Tooling / local AI settings
+.claude/

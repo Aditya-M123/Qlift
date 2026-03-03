@@ -1,0 +1,92 @@
+- rule_id: "OBQ-018"
+  version: "1.0"
+  name: "MINUS to EXCEPT DISTINCT"
+  severity: "high"
+  source_pattern:
+    keyword: "MINUS"
+  target_pattern: "EXCEPT DISTINCT"
+  confidence: 1.0
+  tags: ["set-operation", "keyword"]
+  why: >
+    Oracle MINUS is equivalent to SQL standard EXCEPT. BigQuery requires
+    EXCEPT DISTINCT (the DISTINCT qualifier is mandatory in BigQuery).
+  tests:
+    - input: "SELECT id FROM a MINUS SELECT id FROM b"
+      expected: "SELECT id FROM a EXCEPT DISTINCT SELECT id FROM b"
+    - input: "SELECT col1 FROM t1 MINUS SELECT col1 FROM t2"
+      expected: "SELECT col1 FROM t1 EXCEPT DISTINCT SELECT col1 FROM t2"
+
+- rule_id: "OBQ-019"
+  version: "1.0"
+  name: "DUAL removal"
+  severity: "medium"
+  source_pattern:
+    keyword: "FROM_DUAL"
+  target_pattern: "(remove FROM DUAL)"
+  confidence: 1.0
+  tags: ["keyword", "syntax"]
+  why: >
+    Oracle requires FROM DUAL for SELECT without a table. BigQuery does not
+    need or support DUAL — simply remove the FROM DUAL clause.
+  tests:
+    - input: "SELECT 1 FROM DUAL"
+      expected: "SELECT 1"
+    - input: "SELECT SYSDATE FROM DUAL"
+      expected: "SELECT CURRENT_DATETIME()"
+
+- rule_id: "OBQ-020"
+  version: "1.0"
+  name: "ROWNUM WHERE to LIMIT"
+  severity: "high"
+  source_pattern:
+    construct: "ROWNUM_WHERE"
+  target_pattern: "LIMIT {n}"
+  confidence: 0.9
+  tags: ["construct", "pagination"]
+  why: >
+    Oracle WHERE ROWNUM <= n limits result rows. BigQuery uses LIMIT.
+    Note: ROWNUM is applied before ORDER BY in Oracle, so the translation
+    may need a subquery to preserve ordering semantics.
+  tests:
+    - input: "SELECT * FROM emp WHERE ROWNUM <= 10"
+      expected: "SELECT * FROM emp LIMIT 10"
+    - input: "SELECT * FROM orders WHERE ROWNUM <= 100"
+      expected: "SELECT * FROM orders LIMIT 100"
+
+- rule_id: "OBQ-021"
+  version: "1.0"
+  name: "ROWNUM SELECT to ROW_NUMBER"
+  severity: "high"
+  source_pattern:
+    construct: "ROWNUM_SELECT"
+  target_pattern: "ROW_NUMBER() OVER ()"
+  confidence: 0.9
+  tags: ["construct", "window-function"]
+  why: >
+    Oracle ROWNUM in the SELECT list assigns sequential numbers to rows.
+    BigQuery uses ROW_NUMBER() OVER () as the equivalent. Add an ORDER BY
+    inside OVER() if deterministic ordering is required.
+  tests:
+    - input: "SELECT ROWNUM, name FROM emp"
+      expected: "SELECT ROW_NUMBER() OVER () AS rownum, name FROM emp"
+    - input: "SELECT ROWNUM AS rn, col1 FROM t"
+      expected: "SELECT ROW_NUMBER() OVER () AS rn, col1 FROM t"
+
+- rule_id: "OBQ-022"
+  version: "1.0"
+  name: "REGEXP_LIKE to REGEXP_CONTAINS"
+  severity: "medium"
+  source_pattern:
+    function: "REGEXP_LIKE"
+  target_pattern: "REGEXP_CONTAINS({a}, r'{b}')"
+  confidence: 0.95
+  tags: ["function", "regex"]
+  why: >
+    Oracle REGEXP_LIKE(string, pattern) tests if a string matches a regex.
+    BigQuery uses REGEXP_CONTAINS. Note: BigQuery uses RE2 regex syntax,
+    which differs from Oracle's POSIX-extended regex in some edge cases.
+  tests:
+    - input: "REGEXP_LIKE(email, '^[a-z]+@')"
+      expected: "REGEXP_CONTAINS(email, r'^[a-z]+@')"
+    - input: "REGEXP_LIKE(phone, '^\\d{3}-')"
+      expected: "REGEXP_CONTAINS(phone, r'^\\d{3}-')"

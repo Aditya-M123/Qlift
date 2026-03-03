@@ -1,0 +1,153 @@
+- rule_id: "OBQ-005"
+  version: "1.0"
+  name: "SYSDATE to CURRENT_DATETIME"
+  severity: "critical"
+  source_pattern:
+    keyword: "SYSDATE"
+  target_pattern: "CURRENT_DATETIME()"
+  confidence: 1.0
+  tags: ["datetime", "keyword", "gotcha"]
+  why: >
+    CRITICAL: Oracle SYSDATE returns DATE which includes time component.
+    Must map to CURRENT_DATETIME() in BigQuery — NOT CURRENT_DATE() which
+    drops the time portion and silently loses data.
+  tests:
+    - input: "SELECT SYSDATE FROM DUAL"
+      expected: "SELECT CURRENT_DATETIME()"
+    - input: "WHERE created_at > SYSDATE - 1"
+      expected: "WHERE created_at > CURRENT_DATETIME() - 1"
+
+- rule_id: "OBQ-006"
+  version: "1.0"
+  name: "TRUNC(SYSDATE) to CURRENT_DATE"
+  severity: "high"
+  source_pattern:
+    function: "TRUNC"
+    arg_type: "date"
+  target_pattern: "CURRENT_DATE()"
+  confidence: 1.0
+  tags: ["datetime", "function"]
+  why: >
+    Oracle TRUNC(date) strips the time component. When applied to SYSDATE,
+    this is equivalent to BigQuery CURRENT_DATE(). This is the ONLY case
+    where CURRENT_DATE() is correct for a SYSDATE translation.
+  tests:
+    - input: "TRUNC(SYSDATE)"
+      expected: "CURRENT_DATE()"
+    - input: "WHERE hire_date >= TRUNC(SYSDATE)"
+      expected: "WHERE hire_date >= CURRENT_DATE()"
+
+- rule_id: "OBQ-007"
+  version: "1.0"
+  name: "ADD_MONTHS to DATE_ADD"
+  severity: "high"
+  source_pattern:
+    function: "ADD_MONTHS"
+    arg_count: 2
+  target_pattern: "DATE_ADD({a}, INTERVAL {b} MONTH)"
+  confidence: 0.95
+  tags: ["datetime", "function"]
+  why: >
+    Oracle ADD_MONTHS(date, n) adds n months. BigQuery uses DATE_ADD with
+    INTERVAL syntax. Edge-case: Oracle's end-of-month behavior differs
+    slightly from BigQuery's.
+  tests:
+    - input: "ADD_MONTHS(hire_date, 6)"
+      expected: "DATE_ADD(hire_date, INTERVAL 6 MONTH)"
+    - input: "ADD_MONTHS(SYSDATE, -3)"
+      expected: "DATE_ADD(CURRENT_DATETIME(), INTERVAL -3 MONTH)"
+
+- rule_id: "OBQ-008"
+  version: "1.0"
+  name: "MONTHS_BETWEEN to DATE_DIFF"
+  severity: "high"
+  source_pattern:
+    function: "MONTHS_BETWEEN"
+    arg_count: 2
+  target_pattern: "DATE_DIFF({a}, {b}, MONTH)"
+  confidence: 0.95
+  tags: ["datetime", "function"]
+  why: >
+    Oracle MONTHS_BETWEEN returns a fractional number of months. BigQuery
+    DATE_DIFF returns an integer. The fractional part is lost in translation.
+  tests:
+    - input: "MONTHS_BETWEEN(end_date, start_date)"
+      expected: "DATE_DIFF(end_date, start_date, MONTH)"
+    - input: "MONTHS_BETWEEN(SYSDATE, hire_date)"
+      expected: "DATE_DIFF(CURRENT_DATETIME(), hire_date, MONTH)"
+
+- rule_id: "OBQ-009"
+  version: "1.0"
+  name: "TO_CHAR date to FORMAT_DATETIME"
+  severity: "high"
+  source_pattern:
+    function: "TO_CHAR"
+    arg_type: "date"
+  target_pattern: "FORMAT_DATETIME({format}, {a})"
+  confidence: 0.9
+  tags: ["datetime", "function", "format"]
+  why: >
+    Oracle TO_CHAR(date, format) formats a date as a string. BigQuery uses
+    FORMAT_DATETIME. Note: Oracle and BigQuery format strings differ —
+    e.g., Oracle 'YYYY-MM-DD' becomes BigQuery '%Y-%m-%d'.
+  tests:
+    - input: "TO_CHAR(hire_date, 'YYYY-MM-DD')"
+      expected: "FORMAT_DATETIME('%Y-%m-%d', hire_date)"
+    - input: "TO_CHAR(SYSDATE, 'DD-MON-YYYY')"
+      expected: "FORMAT_DATETIME('%d-%b-%Y', CURRENT_DATETIME())"
+
+- rule_id: "OBQ-010"
+  version: "1.0"
+  name: "TO_DATE to PARSE_DATETIME"
+  severity: "high"
+  source_pattern:
+    function: "TO_DATE"
+    arg_count: 2
+  target_pattern: "PARSE_DATETIME({format}, {a})"
+  confidence: 0.9
+  tags: ["datetime", "function", "format"]
+  why: >
+    Oracle TO_DATE(string, format) parses a string into a date. BigQuery
+    uses PARSE_DATETIME. Format string translation is required.
+  tests:
+    - input: "TO_DATE('2024-01-15', 'YYYY-MM-DD')"
+      expected: "PARSE_DATETIME('%Y-%m-%d', '2024-01-15')"
+    - input: "TO_DATE(date_str, 'DD/MM/YYYY')"
+      expected: "PARSE_DATETIME('%d/%m/%Y', date_str)"
+
+- rule_id: "OBQ-011"
+  version: "1.0"
+  name: "SYSTIMESTAMP to CURRENT_TIMESTAMP"
+  severity: "medium"
+  source_pattern:
+    keyword: "SYSTIMESTAMP"
+  target_pattern: "CURRENT_TIMESTAMP()"
+  confidence: 1.0
+  tags: ["datetime", "keyword"]
+  why: >
+    Oracle SYSTIMESTAMP returns the current timestamp with timezone.
+    BigQuery CURRENT_TIMESTAMP() is the direct equivalent.
+  tests:
+    - input: "SELECT SYSTIMESTAMP FROM DUAL"
+      expected: "SELECT CURRENT_TIMESTAMP()"
+    - input: "WHERE updated_at < SYSTIMESTAMP"
+      expected: "WHERE updated_at < CURRENT_TIMESTAMP()"
+
+- rule_id: "OBQ-012"
+  version: "1.0"
+  name: "TO_TIMESTAMP to PARSE_TIMESTAMP"
+  severity: "medium"
+  source_pattern:
+    function: "TO_TIMESTAMP"
+    arg_count: 2
+  target_pattern: "PARSE_TIMESTAMP({format}, {a})"
+  confidence: 0.9
+  tags: ["datetime", "function", "format"]
+  why: >
+    Oracle TO_TIMESTAMP(string, format) parses a string into a timestamp.
+    BigQuery uses PARSE_TIMESTAMP. Format strings must be translated.
+  tests:
+    - input: "TO_TIMESTAMP('2024-01-15 10:30:00', 'YYYY-MM-DD HH24:MI:SS')"
+      expected: "PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', '2024-01-15 10:30:00')"
+    - input: "TO_TIMESTAMP(ts_str, 'DD-MON-YYYY HH24:MI:SS')"
+      expected: "PARSE_TIMESTAMP('%d-%b-%Y %H:%M:%S', ts_str)"

@@ -1,0 +1,88 @@
+- rule_id: "OBQ-040"
+  version: "1.0"
+  name: "FOR rec IN cursor LOOP to set-based"
+  severity: "critical"
+  source_pattern:
+    construct: "CURSOR_FOR_LOOP"
+  target_pattern: "Set-based SQL query (eliminate row-by-row processing)"
+  confidence: 0.7
+  tags: ["architectural", "cursor", "plsql"]
+  why: >
+    Oracle cursor FOR loops process rows one at a time. BigQuery is a
+    columnar analytics engine — row-by-row processing is an anti-pattern.
+    Rewrite as a single set-based SQL statement. This requires manual
+    analysis of the loop body to determine the equivalent set operation.
+  tests:
+    - input: "FOR rec IN (SELECT id, name FROM emp) LOOP UPDATE ... END LOOP"
+      expected: "UPDATE ... SET ... (single set-based statement)"
+
+- rule_id: "OBQ-041"
+  version: "1.0"
+  name: "BULK COLLECT INTO to temp table or set-based"
+  severity: "critical"
+  source_pattern:
+    construct: "BULK_COLLECT"
+  target_pattern: "Temp table or set-based SQL (eliminate PL/SQL collection)"
+  confidence: 0.5
+  tags: ["architectural", "cursor", "plsql", "collection"]
+  why: >
+    Oracle BULK COLLECT loads results into a PL/SQL collection (array).
+    BigQuery has no PL/SQL collections. Options: (1) use a temp table,
+    (2) rewrite as a single set-based query, or (3) use BigQuery scripting
+    with DECLARE and SET for simple cases.
+  tests:
+    - input: "SELECT id BULK COLLECT INTO l_ids FROM emp WHERE dept = 10"
+      expected: "CREATE TEMP TABLE tmp_ids AS SELECT id FROM emp WHERE dept = 10"
+
+- rule_id: "OBQ-042"
+  version: "1.0"
+  name: "OPEN/FETCH/CLOSE to set-based with scripting"
+  severity: "critical"
+  source_pattern:
+    construct: "OPEN_FETCH_CLOSE"
+  target_pattern: "Set-based SQL with BigQuery scripting if needed"
+  confidence: 0.5
+  tags: ["architectural", "cursor", "plsql"]
+  why: >
+    Oracle explicit cursor management (OPEN, FETCH, CLOSE) is row-oriented.
+    BigQuery should use set-based SQL. For complex procedural logic, BigQuery
+    scripting (BEGIN...END, LOOP, IF) can be used, but set-based is preferred.
+  tests:
+    - input: "OPEN cur; FETCH cur INTO v_id, v_name; CLOSE cur"
+      expected: "SELECT id, name FROM ... (set-based query)"
+
+- rule_id: "OBQ-043"
+  version: "1.0"
+  name: "%ROWTYPE to STRUCT or explicit columns"
+  severity: "high"
+  source_pattern:
+    construct: "ROWTYPE_ATTRIBUTE"
+  target_pattern: "STRUCT<...> or explicit column list"
+  confidence: 0.6
+  tags: ["architectural", "plsql", "type-system"]
+  why: >
+    Oracle %ROWTYPE declares a record matching a table's row structure.
+    BigQuery has no equivalent. Options: (1) use STRUCT with explicit
+    fields, (2) use explicit column lists, or (3) use JSON.
+  tests:
+    - input: "v_emp emp%ROWTYPE"
+      expected: "DECLARE v_emp STRUCT<id INT64, name STRING, ...>"
+
+- rule_id: "OBQ-044"
+  version: "1.0"
+  name: "%TYPE to explicit BigQuery type"
+  severity: "high"
+  source_pattern:
+    construct: "TYPE_ATTRIBUTE"
+  target_pattern: "Explicit BigQuery type (INT64, STRING, etc.)"
+  confidence: 0.6
+  tags: ["architectural", "plsql", "type-system"]
+  why: >
+    Oracle %TYPE inherits a column's data type. BigQuery has no equivalent.
+    Replace with the explicit BigQuery type after consulting the type mapping
+    rules (OBQ-030..039).
+  tests:
+    - input: "v_name emp.name%TYPE"
+      expected: "DECLARE v_name STRING"
+    - input: "v_id emp.id%TYPE"
+      expected: "DECLARE v_id INT64"

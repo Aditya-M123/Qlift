@@ -1,0 +1,92 @@
+- rule_id: "SBQ-001"
+  version: "1.0"
+  name: "Partition by date recommendation"
+  severity: "medium"
+  source_pattern:
+    construct: "DATE_COLUMN_TABLE"
+  target_pattern: "PARTITION BY DATE({date_column}) or PARTITION BY {date_column}"
+  confidence: 0.8
+  tags: ["bigquery", "optimization", "partitioning"]
+  why: >
+    BigQuery tables with date/timestamp columns should be partitioned to
+    reduce query cost and improve performance. Partitioning prunes scanned
+    data when the partition column is used in WHERE clauses.
+  tests:
+    - input: "CREATE TABLE orders (id INT64, created_at DATE)"
+      expected: "CREATE TABLE orders (id INT64, created_at DATE) PARTITION BY created_at"
+    - input: "CREATE TABLE events (id INT64, event_ts TIMESTAMP)"
+      expected: "CREATE TABLE events (id INT64, event_ts TIMESTAMP) PARTITION BY DATE(event_ts)"
+
+- rule_id: "SBQ-002"
+  version: "1.0"
+  name: "SAFE_DIVIDE pattern"
+  severity: "medium"
+  source_pattern:
+    construct: "DIVISION_EXPRESSION"
+  target_pattern: "SAFE_DIVIDE({numerator}, {denominator})"
+  confidence: 0.9
+  tags: ["bigquery", "safety", "arithmetic"]
+  why: >
+    Division by zero in BigQuery raises an error. SAFE_DIVIDE returns NULL
+    instead of raising an error, making queries more robust. Use whenever
+    the denominator could be zero.
+  tests:
+    - input: "total_amount / num_items"
+      expected: "SAFE_DIVIDE(total_amount, num_items)"
+    - input: "revenue / NULLIF(count, 0)"
+      expected: "SAFE_DIVIDE(revenue, count)"
+
+- rule_id: "SBQ-003"
+  version: "1.0"
+  name: "IS NULL pattern"
+  severity: "low"
+  source_pattern:
+    construct: "NULL_CHECK"
+  target_pattern: "{column} IS NULL / {column} IS NOT NULL"
+  confidence: 1.0
+  tags: ["bigquery", "null-handling", "best-practice"]
+  why: >
+    Always use IS NULL / IS NOT NULL for null comparisons in BigQuery.
+    Never use = NULL or != NULL, which always evaluate to NULL (unknown)
+    in SQL standard. This is a universal SQL best practice.
+  tests:
+    - input: "WHERE col = NULL"
+      expected: "WHERE col IS NULL"
+    - input: "WHERE col != NULL"
+      expected: "WHERE col IS NOT NULL"
+
+- rule_id: "SBQ-004"
+  version: "1.0"
+  name: "GENERATE_UUID for sequences"
+  severity: "medium"
+  source_pattern:
+    construct: "SEQUENCE_REPLACEMENT"
+  target_pattern: "GENERATE_UUID()"
+  confidence: 0.8
+  tags: ["bigquery", "identity", "uuid"]
+  why: >
+    BigQuery has no auto-increment or sequence objects. GENERATE_UUID()
+    produces a unique identifier for each row. Note: UUIDs are not
+    sequential — if ordering is needed, use ROW_NUMBER() or combine
+    with a timestamp.
+  tests:
+    - input: "INSERT INTO t (id, name) VALUES (seq.NEXTVAL, 'test')"
+      expected: "INSERT INTO t (id, name) VALUES (GENERATE_UUID(), 'test')"
+
+- rule_id: "SBQ-005"
+  version: "1.0"
+  name: "Clustering recommendation"
+  severity: "low"
+  source_pattern:
+    construct: "FREQUENTLY_FILTERED_COLUMNS"
+  target_pattern: "CLUSTER BY {col1}, {col2}, ..."
+  confidence: 0.7
+  tags: ["bigquery", "optimization", "clustering"]
+  why: >
+    BigQuery clustering sorts data within each partition by the specified
+    columns, improving performance for queries that filter or aggregate
+    on those columns. Cluster by columns commonly used in WHERE, JOIN,
+    and GROUP BY clauses (up to 4 columns).
+  tests:
+    - input: "CREATE TABLE orders (id INT64, customer_id INT64, status STRING, created_at DATE) PARTITION BY created_at"
+      expected: "CREATE TABLE orders (id INT64, customer_id INT64, status STRING, created_at DATE) PARTITION BY created_at CLUSTER BY customer_id, status"

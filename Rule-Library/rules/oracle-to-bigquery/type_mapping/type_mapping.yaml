@@ -1,0 +1,177 @@
+- rule_id: "OBQ-030"
+  version: "1.0"
+  name: "VARCHAR2 to STRING"
+  severity: "high"
+  source_pattern:
+    object_type: "VARCHAR2"
+  target_pattern: "STRING"
+  confidence: 1.0
+  tags: ["type-mapping", "string"]
+  why: >
+    Oracle VARCHAR2(n) maps to BigQuery STRING. BigQuery STRING has no
+    length limit (up to the row size limit), so the length constraint
+    is dropped.
+  tests:
+    - input: "VARCHAR2(100)"
+      expected: "STRING"
+    - input: "VARCHAR2(4000)"
+      expected: "STRING"
+
+- rule_id: "OBQ-031"
+  version: "1.0"
+  name: "NUMBER to NUMERIC"
+  severity: "critical"
+  source_pattern:
+    object_type: "NUMBER"
+  target_pattern: "NUMERIC"
+  confidence: 1.0
+  tags: ["type-mapping", "numeric", "gotcha"]
+  why: >
+    CRITICAL: Oracle NUMBER (no precision/scale) must map to BigQuery NUMERIC,
+    NOT FLOAT64. FLOAT64 introduces floating-point precision errors that can
+    corrupt financial data. NUMERIC provides exact decimal arithmetic.
+  tests:
+    - input: "NUMBER"
+      expected: "NUMERIC"
+    - input: "NUMBER(38,10)"
+      expected: "NUMERIC"
+
+- rule_id: "OBQ-032"
+  version: "1.0"
+  name: "NUMBER(p,0) to INT64"
+  severity: "high"
+  source_pattern:
+    object_type: "NUMBER_INT"
+  target_pattern: "INT64"
+  confidence: 1.0
+  tags: ["type-mapping", "numeric", "integer"]
+  why: >
+    Oracle NUMBER(p,0) with scale=0 is an integer type. BigQuery INT64 is
+    the correct mapping. This applies to NUMBER(n) shorthand as well when
+    used as an integer type.
+  tests:
+    - input: "NUMBER(10,0)"
+      expected: "INT64"
+    - input: "NUMBER(5,0)"
+      expected: "INT64"
+
+- rule_id: "OBQ-033"
+  version: "1.0"
+  name: "CLOB to STRING"
+  severity: "high"
+  source_pattern:
+    object_type: "CLOB"
+  target_pattern: "STRING"
+  confidence: 0.95
+  tags: ["type-mapping", "lob"]
+  why: >
+    Oracle CLOB stores large character data (up to 4 GB). BigQuery STRING
+    is the closest equivalent, though it has a row size limit. Very large
+    CLOBs may need to be stored in Cloud Storage instead.
+  tests:
+    - input: "CLOB"
+      expected: "STRING"
+
+- rule_id: "OBQ-034"
+  version: "1.0"
+  name: "BLOB to BYTES"
+  severity: "high"
+  source_pattern:
+    object_type: "BLOB"
+  target_pattern: "BYTES"
+  confidence: 0.95
+  tags: ["type-mapping", "lob"]
+  why: >
+    Oracle BLOB stores large binary data. BigQuery BYTES is the closest
+    equivalent. Very large BLOBs may need to be stored in Cloud Storage.
+  tests:
+    - input: "BLOB"
+      expected: "BYTES"
+
+- rule_id: "OBQ-035"
+  version: "1.0"
+  name: "XMLTYPE to JSON"
+  severity: "medium"
+  source_pattern:
+    object_type: "XMLTYPE"
+  target_pattern: "JSON"
+  confidence: 0.7
+  tags: ["type-mapping", "semi-structured", "lossy"]
+  why: >
+    Oracle XMLTYPE stores XML data. BigQuery has no native XML type.
+    JSON is the closest semi-structured alternative, but XML-to-JSON
+    conversion is lossy (attributes, namespaces, ordering). Manual
+    review is strongly recommended.
+  tests:
+    - input: "XMLTYPE"
+      expected: "JSON"
+
+- rule_id: "OBQ-036"
+  version: "1.0"
+  name: "DATE to DATETIME"
+  severity: "high"
+  source_pattern:
+    object_type: "DATE"
+  target_pattern: "DATETIME"
+  confidence: 1.0
+  tags: ["type-mapping", "datetime"]
+  why: >
+    Oracle DATE includes a time component (YYYY-MM-DD HH:MI:SS). BigQuery
+    DATE does not include time. Use DATETIME to preserve the time portion.
+    This is a common source of bugs when mapping Oracle DATE to BigQuery DATE.
+  tests:
+    - input: "DATE"
+      expected: "DATETIME"
+
+- rule_id: "OBQ-037"
+  version: "1.0"
+  name: "TIMESTAMP to TIMESTAMP"
+  severity: "low"
+  source_pattern:
+    object_type: "TIMESTAMP"
+  target_pattern: "TIMESTAMP"
+  confidence: 1.0
+  tags: ["type-mapping", "datetime", "compatible"]
+  why: >
+    Oracle TIMESTAMP and BigQuery TIMESTAMP are semantically compatible.
+    Both store date and time with sub-second precision. No translation needed.
+  tests:
+    - input: "TIMESTAMP"
+      expected: "TIMESTAMP"
+
+- rule_id: "OBQ-038"
+  version: "1.0"
+  name: "CHAR to STRING"
+  severity: "medium"
+  source_pattern:
+    object_type: "CHAR"
+  target_pattern: "STRING"
+  confidence: 1.0
+  tags: ["type-mapping", "string"]
+  why: >
+    Oracle CHAR(n) is a fixed-length string padded with spaces. BigQuery
+    STRING does not pad. Downstream logic relying on fixed-width padding
+    may need adjustment.
+  tests:
+    - input: "CHAR(10)"
+      expected: "STRING"
+    - input: "CHAR(1)"
+      expected: "STRING"
+
+- rule_id: "OBQ-039"
+  version: "1.0"
+  name: "RAW to BYTES"
+  severity: "medium"
+  source_pattern:
+    object_type: "RAW"
+  target_pattern: "BYTES"
+  confidence: 0.95
+  tags: ["type-mapping", "binary"]
+  why: >
+    Oracle RAW(n) stores raw binary data up to 2000 bytes. BigQuery BYTES
+    is the equivalent type.
+  tests:
+    - input: "RAW(16)"
+      expected: "BYTES"
+    - input: "RAW(2000)"
+      expected: "BYTES"
